@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="C:/Users/Rakesh/youtube_us.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="3"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="2823"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="youtube_us" custom_title="0" dock_id="1" table="4,10:mainyoutube_us"/><dock_state state="000000ff00000000fd00000001000000020000043c000002b4fc0100000001fb000000160064006f0063006b00420072006f007700730065003101000000000000043c0000011800ffffff000002580000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings/></tab_browse><tab_sql><sql name="SQL 1">SELECT name FROM sqlite_master WHERE type='table';
+PRAGMA table_info('videos');
+SELECT * FROM videos LIMIT 5;
+
+DROP VIEW IF EXISTS normalized_videos;
+
+CREATE VIEW normalized_videos AS
+SELECT
+  video_id,
+  title,
+  channel_title,
+  category_id,
+  -- Parse trending_date 'YY.DD.MM' -&gt; 'YYYY-MM-DD'
+  date('20' || substr(trending_date,1,2) || '-' ||
+             substr(trending_date,7,2) || '-' ||
+             substr(trending_date,4,2)) AS trending_date,
+  substr(publish_time,1,10) AS publish_date,
+  CAST(views AS INTEGER) AS views,
+  CAST(likes AS INTEGER) AS likes,
+  CAST(dislikes AS INTEGER) AS dislikes,
+  CAST(comment_count AS INTEGER) AS comment_count
+FROM videos;
+
+CREATE TABLE IF NOT EXISTS CategoryMap (
+  category_id INTEGER PRIMARY KEY,
+  category_name TEXT
+);
+
+INSERT OR REPLACE INTO CategoryMap (category_id, category_name) VALUES
+(1,'Film &amp; Animation'),
+(2,'Autos &amp; Vehicles'),
+(10,'Music'),
+(15,'Pets &amp; Animals'),
+(17,'Sports'),
+(19,'Travel &amp; Events'),
+(20,'Gaming'),
+(22,'People &amp; Blogs'),
+(23,'Comedy'),
+(24,'Entertainment'),
+(25,'News &amp; Politics'),
+(26,'Howto &amp; Style'),
+(27,'Education'),
+(28,'Science &amp; Technology'),
+(29,'Nonprofits &amp; Activism');
+
+SELECT
+  cm.category_name,
+  COUNT(*) AS trend_count
+FROM normalized_videos nv
+LEFT JOIN CategoryMap cm ON nv.category_id = cm.category_id
+GROUP BY nv.category_id
+ORDER BY trend_count DESC;
+
+SELECT
+  channel_title,
+  COUNT(*) AS trending_videos
+FROM normalized_videos
+GROUP BY channel_title
+ORDER BY trending_videos DESC
+LIMIT 20;
+
+SELECT
+  cm.category_name,
+  ROUND(AVG(views),0) AS avg_views,
+  ROUND(AVG(likes),0) AS avg_likes,
+  ROUND(AVG(dislikes),0) AS avg_dislikes,
+  ROUND(AVG(comment_count),0) AS avg_comments
+FROM normalized_videos nv
+LEFT JOIN CategoryMap cm ON nv.category_id = cm.category_id
+GROUP BY nv.category_id
+ORDER BY avg_views DESC;
+
+SELECT
+  cm.category_name,
+  ROUND(AVG(1.0 * likes / NULLIF(views,0)), 4) AS like_rate,
+  ROUND(AVG(1.0 * comment_count / NULLIF(views,0)), 4) AS comment_rate
+FROM normalized_videos nv
+LEFT JOIN CategoryMap cm ON nv.category_id = cm.category_id
+GROUP BY nv.category_id
+ORDER BY like_rate DESC;
+
+SELECT
+  title, channel_title, views, likes,
+  ROUND(likes * 100.0 / NULLIF(views,0), 2) AS like_ratio_pct
+FROM normalized_videos
+WHERE views &gt;= 1000000
+ORDER BY like_ratio_pct DESC
+LIMIT 20;
+
+SELECT
+  title, channel_title, views, likes,
+  ROUND(likes * 100.0 / NULLIF(views,0), 2) AS like_ratio_pct
+FROM normalized_videos
+WHERE views &gt;= 1000000
+  AND (1.0 * likes / NULLIF(views,0)) &lt; 0.02
+ORDER BY views DESC
+LIMIT 20;
+
+SELECT
+  title, channel_title,
+  publish_date, trending_date,
+  ROUND(julianday(trending_date) - julianday(publish_date),1) AS days_to_trend
+FROM normalized_videos
+WHERE publish_date IS NOT NULL
+ORDER BY days_to_trend ASC
+LIMIT 20;
+
+SELECT
+  video_id,
+  MAX(title) AS title,
+  MAX(channel_title) AS channel,
+  COUNT(*) AS trending_days
+FROM normalized_videos
+GROUP BY video_id
+ORDER BY COUNT(*) DESC
+LIMIT 20;</sql><current_tab id="0"/></tab_sql></sqlb_project>
